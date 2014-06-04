@@ -1,0 +1,13 @@
+Features
+
+* Vectorize map tile (binarize,thin,trace,clear,approximate)
+
+Dependencies
+
+The script is tested on Ubuntu 14.04
+
+sudo apt-get install python-numpy python-scipy python-skimage python-matplotlib
+
+Run
+
+python kadastr_tile_vectorize.py
