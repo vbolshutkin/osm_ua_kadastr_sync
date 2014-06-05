@@ -1,13 +1,18 @@
-Features
+[[Features]]
 
 * Vectorize map tile (binarize,thin,trace,clear,approximate)
+* Build polygons with possible holes
 
-Dependencies
+[[Dependencies]]
 
 The script is tested on Ubuntu 14.04
 
-sudo apt-get install python-numpy python-scipy python-skimage python-matplotlib
+* Install base dependencies
 
-Run
+sudo apt-get install python-numpy python-scipy python-skimage python-matplotlib python-shapely
+
+* Install Polygon library from http://www.j-raedler.de/projects/polygon/
+
+[[Run]]
 
 python kadastr_tile_vectorize.py
