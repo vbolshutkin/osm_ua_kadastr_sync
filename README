@@ -2,6 +2,7 @@
 
 * Vectorize map tile (binarize,thin,trace,clear,approximate)
 * Build polygons with possible holes
+* Find center points of polygons to query map feature (KOATUU)
 
 [[Dependencies]]
 

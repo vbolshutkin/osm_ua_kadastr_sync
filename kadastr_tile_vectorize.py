@@ -131,11 +131,7 @@ lines = filter(lambda x: not (len(x) < 2 or (len(x) == 2 and distance(x[0],x[1])
 
 appr_lines = map(lambda x : approximate_polygon(np.array(x), tolerance=1.5), lines)
 
-# polygonize
-from shapely.geometry import LineString, MultiLineString, Polygon
-from shapely.ops import polygonize, polygonize_full, transform
-
-pair_lines = []
+# snap to bounds
 sz = 255
 
 def round_snap_bound(v):
@@ -144,15 +140,16 @@ def round_snap_bound(v):
   if (r >= sz - 2): return sz
   return r
 
-for l in appr_lines:
-  for i in xrange(len(l) - 1):
-    p1 = l[i]
-    p2 = l[i+1]
-    p1x = round_snap_bound(p1[0])
-    p1y = round_snap_bound(p1[1])
-    p2x = round_snap_bound(p2[0])
-    p2y = round_snap_bound(p2[1])
-    pair_lines.append(((p1x, p1y), (p2x, p2y)))
+snap_lines = map(lambda x : map(lambda p: (round_snap_bound(p[0]),round_snap_bound(p[1])), x), appr_lines)
+
+
+
+
+# polygonize
+from shapely.geometry import LineString, MultiLineString, Polygon, Point
+from shapely.ops import polygonize, polygonize_full, transform, linemerge
+
+shapely_line_strings = map(lambda x: LineString(x) , snap_lines)
 
 # add bounding lines needed by polygonize (it's easy to do per pixel. TODO refactor to create only necessary lines)
 #for i in xrange(sz):
@@ -161,11 +158,10 @@ for l in appr_lines:
 #  pair_lines.append(((i,0),(i+1,0)))
 #  pair_lines.append(((i,sz),(i+1,sz)))
 
-#ps = list(polygonize(pair_lines))
-
+#ps = list(polygonize(shapely_line_strings))
 
 # simple polygonize doesn't work. it is a trick (see http://gis.stackexchange.com/questions/58245/generate-polygons-from-a-set-of-intersecting-lines)
-M = MultiLineString(pair_lines)
+M = MultiLineString(shapely_line_strings)
 MB = M.buffer(0.001)
 P = Polygon([(0, 0), (0, sz), (sz, sz), (sz, 0)])
 pso = P.difference(MB)
@@ -177,7 +173,74 @@ for p in pso:
   pbt = transform(lambda x, y, z=None: (int(round(x)), int(round(y))), pb)
   ps.append(pbt)
 
+# associate LineString_s with Polygon_s
+pt_polygon_index = dict();
 
+for p in ps:
+  for pt in p.exterior.coords:
+    if (pt_polygon_index.get(pt) == None): pt_polygon_index[pt] = set()
+    pt_polygon_index[pt].add(p)
+  for i in p.interiors:
+    for pt in i.coords:
+      if (pt_polygon_index.get(pt) == None): pt_polygon_index[pt] = set()
+      pt_polygon_index[pt].add(p)
+
+polygon_exterior_lines_index = dict();
+polygon_interior_lines_index = dict();
+for l in shapely_line_strings:
+  if (pt_polygon_index.get(l.coords[0]) == None or pt_polygon_index.get(l.coords[-1]) == None): 
+    print l.coords[0], pt_polygon_index.get(l.coords[0])
+    print l.coords[-1], pt_polygon_index.get(l.coords[-1])
+    continue
+  polygons_start = pt_polygon_index[l.coords[0]]
+  polygons_end = pt_polygon_index[l.coords[-1]]
+  for p in polygons_start.intersection(polygons_end):
+    if (p.exterior.contains(l)): 
+      if (polygon_exterior_lines_index.get(p) == None): polygon_exterior_lines_index[p] = set()
+      polygon_exterior_lines_index[p].add(l)
+    for i in p.interiors:
+      if (i.contains(l)): 
+        if (polygon_interior_lines_index.get(p) == None): polygon_interior_lines_index[p] = set()
+        polygon_interior_lines_index[p].add(l)
+
+print polygon_exterior_lines_index
+print polygon_interior_lines_index
+
+#for p in ps:
+#  ml = linemerge(polygon_exterior_lines_index.get(p, []))
+#  print p, ml.is_ring
+
+# find interior points
+from Polygon import Polygon
+import random
+
+def interiorPoint(shapely_polygon):
+  
+  def dih(a, b):
+    print a, b
+    if (a >= b - 1): return a
+    c = (a + b) / 2
+    p = shapely_polygon.buffer(-c)
+    if (p.area == 0): return dih(a - 1, c)
+    else: return dih(c, b)
+    
+  threshold = dih(1,50)
+
+  p = shapely_polygon.buffer(-threshold)
+
+  print threshold, shapely_polygon.area, p.area
+
+  cp = Polygon()
+  cp.addContour(p.exterior.coords, False)
+  for i in p.interiors:
+    cp.addContour(i.coords, True)
+
+  while True:
+    ip = cp.sample(random.random)
+    int_point = (int(round(ip[0])), int(round(ip[1])))
+    if (shapely_polygon.contains(Point(int_point))):
+      return int_point
+  
 
 # display results
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4.5))
@@ -192,11 +255,23 @@ if False:
   for al in appr_lines:
     ax2.plot(al[:, 1], al[:, 0])
 
-if True:
+if False:
   for p in ps:
     coords = list(p.exterior.coords)
     npc = np.array(coords)
     ax2.plot(npc[:, 1], npc[:, 0])
+
+print len(ps)
+if True:
+  for p in ps:
+    for l in polygon_exterior_lines_index.get(p, []):
+      coords = list(l.coords)
+      npc = np.array(coords)
+      ax2.plot(npc[:, 1], npc[:, 0])
+
+    ip = interiorPoint(p);
+    ax2.plot([ip[1]], [ip[0]], 'or')
+
 
 
 ax2.axis('off')
